@@ -28,9 +28,9 @@ mod tests {
 
     #[test]
     fn from_str_should_return_cronschedule(){
-        let _c = CronCommand::from_str( "15 * * * *");
+        let c = CronSchedule::from_str( "15 * * * *" ).unwrap();
 
-        assert!( true );
+        assert_eq!( c.to_string(), "15 * * * *" );
     }
 
     #[test]
@@ -144,14 +144,13 @@ impl CronSchedule {
     }
 
     pub fn from_str( cron_string: &str ) -> Result<CronSchedule, String> {
-        let parts: Vec<&str> = cron_string.split( " " ).collect();
+        let parts: Vec<&str> = cron_string.split( ' ' ).collect();
 
         if parts.len() != 5 {
             return Err( format!( "Invalid Cron string {}", cron_string ) );
         }
 
-        
-        match CronSchedule::new("*", "*", "*", "*", "*" ) {
+        match CronSchedule::new( parts[ 0 ], parts[ 1 ], parts[ 2 ], parts[ 3 ], parts[ 4 ] ) {
             Ok( c ) => Ok( c ),
             _ => Err( format!( "Invalid Cron string {}", cron_string ) )
         }
