@@ -43,6 +43,7 @@ mod tests {
         );
     }
 
+    #[test]
     fn should_increment_hour_if_minute_in_past(){
         let c = CronSchedule::new( "15", "*", "*", "*", "*" ).unwrap();
 
