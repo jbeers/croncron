@@ -52,8 +52,48 @@ mod tests {
             Utc.with_ymd_and_hms(2020, 11, 28, 6, 15, 0).unwrap()
         );
     }
+
+    #[test]
+    fn should_support_numbers_for_hour(){
+        let c = CronSchedule::new( "*", "7", "*", "*", "*" ).unwrap();
+        assert_eq!(
+            c.get_next_occurrence( Utc.with_ymd_and_hms(2020, 11, 28, 5, 20, 0).unwrap() ),
+            Utc.with_ymd_and_hms(2020, 11, 28, 7, 0, 0).unwrap()
+        );
+    }
+
+    #[test]
+    fn should_support_numbers_for_day_of_month(){
+        let c = CronSchedule::new( "*", "*", "30", "*", "*" ).unwrap();
+        
+        assert_eq!(
+            c.get_next_occurrence( Utc.with_ymd_and_hms(2020, 11, 28, 1, 20, 0).unwrap() ),
+            Utc.with_ymd_and_hms(2020, 11, 30, 0, 0, 0).unwrap()
+        );
+    }
+
+    #[test]
+    fn should_support_numbers_for_month(){
+        let c = CronSchedule::new( "*", "*", "*", "1", "*" ).unwrap();
+        
+        assert_eq!(
+            c.get_next_occurrence( Utc.with_ymd_and_hms(2020, 12, 28, 1, 20, 0).unwrap() ),
+            Utc.with_ymd_and_hms(2021, 1, 1, 0, 0, 0).unwrap()
+        );
+    }
+
+    #[test]
+    fn should_support_numbers_for_day_of_week(){
+        let c = CronSchedule::new( "*", "*", "*", "*", "3" ).unwrap();
+        
+        assert_eq!(
+            c.get_next_occurrence( Utc.with_ymd_and_hms(2022, 11, 28, 1, 20, 0).unwrap() ),
+            Utc.with_ymd_and_hms(2022, 11, 30, 0, 0, 0).unwrap()
+        );
+    }
 }
 
+#[derive(Debug)]
 pub enum CronCommand {
     Asterix,
     Number(u32),
@@ -79,6 +119,7 @@ impl CronCommand {
     }
 }
 
+#[derive(Debug)]
 enum CronPosition {
     Minute,
     Hour,
@@ -87,6 +128,7 @@ enum CronPosition {
     DayOfWeek
 }
 
+#[derive(Debug)]
 struct CronArg( CronPosition, CronCommand );
 
 impl CronArg {
@@ -95,6 +137,62 @@ impl CronArg {
             CronCommand::Asterix => date.clone(),
             CronCommand::Number(n) => {
                 match self.0 {
+                    CronPosition::DayOfWeek => {
+                        let current_weekday = date.weekday().num_days_from_sunday();
+                        let to_add = if current_weekday < n {
+                            n - current_weekday
+                        }
+                        else {
+                            ( current_weekday + 7 ) - n
+                        };
+
+
+                        let days = chrono::Days::new( to_add.into() );
+
+                        let next = date.checked_add_days( days ).unwrap()
+                            .with_hour( 0 ).unwrap()
+                            .with_minute(0).unwrap();
+
+                        next
+
+                    },
+                    CronPosition::Month => {
+                        let next = date.clone()
+                            .with_month( n ).unwrap()
+                            .with_day(1).unwrap()
+                            .with_hour( 0 ).unwrap()
+                            .with_minute(0).unwrap();
+
+                        if next.lt( date ) {
+                            next.with_year( date.year() + 1 ).unwrap()
+                        }
+                        else {
+                            next
+                        }
+
+                    },
+                    CronPosition::DayOfMonth => {
+                        let next = date.clone().with_day(n).unwrap().with_hour( 0 ).unwrap().with_minute(0).unwrap();
+
+                        if next.lt( date ) {
+                            next.with_month( date.month() + 1 ).unwrap()
+                        }
+                        else {
+                            next
+                        }
+
+                    },
+                    CronPosition::Hour => {
+                        let next = date.clone().with_hour( n ).unwrap().with_minute(0).unwrap();
+
+                        if next.lt( date ) {
+                            next.with_day( date.day() + 1 ).unwrap()
+                        }
+                        else {
+                            next
+                        }
+
+                    },
                     CronPosition::Minute => {
                         let next = date.clone().with_minute( n ).unwrap();
 
@@ -104,14 +202,14 @@ impl CronArg {
                         else {
                             next
                         }
-                    },
-                    _ => date.clone()
+                    }
                 }
             }
         }
     }
 }
 
+#[derive(Debug)]
 pub struct CronSchedule {
     cron_minute: CronArg,
     cron_hour: CronArg,
@@ -157,7 +255,11 @@ impl CronSchedule {
     }
 
     pub fn get_next_occurrence( &self, start: DateTime<Utc> ) -> DateTime<Utc> {
-        self.cron_minute.update_date( &start )
+        let mut date = self.cron_day_of_week.update_date( &start );
+        date = self.cron_month.update_date( &date );
+        date = self.cron_day_of_month.update_date( &date );
+        date = self.cron_hour.update_date( &date );
+        self.cron_minute.update_date( &date )
     }
 }
 
