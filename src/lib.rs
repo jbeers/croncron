@@ -95,7 +95,7 @@ mod tests {
     #[test]
     fn should_error_on_incorrect_minute_value(){
         let did_error = match CronSchedule::new( "60", "*", "*", "*", "3" ) {
-            Err(e) => true,
+            Err(_e) => true,
             _ => false
         };
         
@@ -105,7 +105,7 @@ mod tests {
     #[test]
     fn should_error_on_incorrect_hour_value(){
         let did_error = match CronSchedule::new( "*", "24", "*", "*", "3" ) {
-            Err(e) => true,
+            Err(_e) => true,
             _ => false
         };
         
@@ -115,7 +115,7 @@ mod tests {
     #[test]
     fn should_error_on_incorrect_day_of_month_value(){
         let did_error = match CronSchedule::new( "*", "*", "32", "*", "3" ) {
-            Err(e) => true,
+            Err(_e) => true,
             _ => false
         };
         
@@ -125,7 +125,7 @@ mod tests {
     #[test]
     fn should_error_on_incorrect_month_value(){
         let did_error = match CronSchedule::new( "*", "*", "*", "0", "3" ) {
-            Err(e) => true,
+            Err(_e) => true,
             _ => false
         };
         
@@ -135,7 +135,7 @@ mod tests {
     #[test]
     fn should_error_on_incorrect_day_of_week_value(){
         let did_error = match CronSchedule::new( "*", "*", "*", "*", "7" ) {
-            Err(e) => true,
+            Err(_e) => true,
             _ => false
         };
         
@@ -145,14 +145,14 @@ mod tests {
 
 #[derive(Debug)]
 pub enum CronCommand {
-    Asterix,
+    Asterisk,
     Number(u32),
 }
 
 impl CronCommand {
     fn from_str( val: &str ) -> Result<CronCommand, Box<dyn Error>> {
         match val {
-            "*" => Ok(CronCommand::Asterix),
+            "*" => Ok(CronCommand::Asterisk),
             v => {
                 let num = u32::from_str_radix( v, 10 )?;
 
@@ -163,7 +163,7 @@ impl CronCommand {
 
     fn to_string( &self ) -> String {
         match self {
-            CronCommand::Asterix => "*".to_owned(),
+            CronCommand::Asterisk => "*".to_owned(),
             CronCommand::Number(n) => n.to_string() 
         }
     }
@@ -259,7 +259,7 @@ impl CronArg {
 
     fn update_date( &self, date: &DateTime<Utc> ) -> DateTime<Utc> {
         match self.1 {
-            CronCommand::Asterix => date.clone(),
+            CronCommand::Asterisk => date.clone(),
             CronCommand::Number(n) => {
                 match self.0 {
                     CronPosition::DayOfWeek => {
