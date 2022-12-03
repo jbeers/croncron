@@ -1,7 +1,7 @@
 
-use std::{error::Error};
+use std::{error::Error, fmt::Display};
 
-use chrono::prelude::*;
+use chrono::{prelude::*};
 /*
 https://en.wikipedia.org/wiki/Cron
 # ┌───────────── minute (0 - 59)
@@ -91,6 +91,56 @@ mod tests {
             Utc.with_ymd_and_hms(2022, 11, 30, 0, 0, 0).unwrap()
         );
     }
+
+    #[test]
+    fn should_error_on_incorrect_minute_value(){
+        let did_error = match CronSchedule::new( "60", "*", "*", "*", "3" ) {
+            Err(e) => true,
+            _ => false
+        };
+        
+        assert!( did_error );
+    }
+
+    #[test]
+    fn should_error_on_incorrect_hour_value(){
+        let did_error = match CronSchedule::new( "*", "24", "*", "*", "3" ) {
+            Err(e) => true,
+            _ => false
+        };
+        
+        assert!( did_error );
+    }
+
+    #[test]
+    fn should_error_on_incorrect_day_of_month_value(){
+        let did_error = match CronSchedule::new( "*", "*", "32", "*", "3" ) {
+            Err(e) => true,
+            _ => false
+        };
+        
+        assert!( did_error );
+    }
+
+    #[test]
+    fn should_error_on_incorrect_month_value(){
+        let did_error = match CronSchedule::new( "*", "*", "*", "0", "3" ) {
+            Err(e) => true,
+            _ => false
+        };
+        
+        assert!( did_error );
+    }
+
+    #[test]
+    fn should_error_on_incorrect_day_of_week_value(){
+        let did_error = match CronSchedule::new( "*", "*", "*", "*", "7" ) {
+            Err(e) => true,
+            _ => false
+        };
+        
+        assert!( did_error );
+    }
 }
 
 #[derive(Debug)]
@@ -128,10 +178,85 @@ enum CronPosition {
     DayOfWeek
 }
 
+impl Display for CronPosition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let display = match self {
+            CronPosition::Minute => "Minute",
+            CronPosition::Hour => "Hour",
+            CronPosition::DayOfMonth => "DayOfMonth",
+            CronPosition::Month => "Month",
+            CronPosition::DayOfWeek => "DayOfWeek",
+        };
+
+        write!( f, "{display}" )
+    }
+}
+
+#[derive(Debug)]
+struct CronNumberParseError {
+    details: String
+}
+
+impl CronNumberParseError {
+    fn new( position: CronPosition, min: u32, max: u32 ) -> CronNumberParseError {
+        CronNumberParseError { details: format!("{} must be between {} and {} inclusive", position, min, max ) }
+    }
+}
+impl Display for CronNumberParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f,"{}", self.details )
+    }
+}
+
+impl Error for CronNumberParseError {
+    fn description(&self) -> &str {
+        &self.details
+    }
+}
+
 #[derive(Debug)]
 struct CronArg( CronPosition, CronCommand );
 
 impl CronArg {
+    fn parse( position: CronPosition, command_string: &str ) -> Result<CronArg, Box<dyn Error>>  {
+        let command = CronCommand::from_str(command_string )?;
+
+        match command {
+            CronCommand::Number(n) => {
+                match position {
+                    CronPosition::Minute => {
+                        if n > 59 {
+                            return Err( Box::new( CronNumberParseError::new( CronPosition::Minute, 0, 59 ) ) );
+                        }
+                    },
+                    CronPosition::Hour => {
+                        if n > 23 {
+                            return Err( Box::new( CronNumberParseError::new( CronPosition::Hour, 0, 23 ) ) );
+                        }
+                    },
+                    CronPosition::DayOfMonth => {
+                        if n > 31 || n == 0 {
+                            return Err( Box::new( CronNumberParseError::new( CronPosition::DayOfMonth, 1, 31 ) ) );
+                        }
+                    },
+                    CronPosition::Month => {
+                        if n > 12 || n == 0 {
+                            return Err( Box::new( CronNumberParseError::new( CronPosition::Month, 1, 12 ) ) );
+                        }
+                    },
+                    CronPosition::DayOfWeek => {
+                        if n > 6 {
+                            return Err( Box::new( CronNumberParseError::new( CronPosition::DayOfWeek, 0, 6 ) ) );
+                        }
+                    }
+                }
+            },
+            _ => {}
+        }
+
+        Ok( CronArg( position, command ) )
+    }
+
     fn update_date( &self, date: &DateTime<Utc> ) -> DateTime<Utc> {
         match self.1 {
             CronCommand::Asterix => date.clone(),
@@ -222,11 +347,11 @@ impl CronSchedule {
 
     pub fn new( minute: &str, hour: &str, day_of_month: &str, month: &str, day_of_week: &str ) -> Result<CronSchedule, Box<dyn Error>> {
         Ok(CronSchedule {
-            cron_minute: CronArg( CronPosition::Minute, CronCommand::from_str( minute )? ),
-            cron_hour: CronArg( CronPosition::Hour, CronCommand::from_str( hour )? ),
-            cron_day_of_month: CronArg( CronPosition::DayOfMonth, CronCommand::from_str( day_of_month )? ),
-            cron_month: CronArg( CronPosition::Month, CronCommand::from_str( month )? ),
-            cron_day_of_week: CronArg( CronPosition::DayOfWeek, CronCommand::from_str( day_of_week )? ),
+            cron_minute: CronArg::parse( CronPosition::Minute, minute )?,
+            cron_hour: CronArg::parse( CronPosition::Hour, hour )?,
+            cron_day_of_month: CronArg::parse( CronPosition::DayOfMonth, day_of_month )?,
+            cron_month: CronArg::parse( CronPosition::Month, month )?,
+            cron_day_of_week: CronArg::parse( CronPosition::DayOfWeek, day_of_week )?,
         })
     }
 
