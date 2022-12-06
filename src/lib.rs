@@ -1,7 +1,10 @@
 
 use std::{error::Error, fmt::Display};
+use regex::Regex;
 
 use chrono::{prelude::*};
+
+mod errors;
 /*
 https://en.wikipedia.org/wiki/Cron
 # ┌───────────── minute (0 - 59)
@@ -141,17 +144,100 @@ mod tests {
         
         assert!( did_error );
     }
+
+    #[test]
+    fn should_parse_range_minute_value(){
+        let c = CronSchedule::new( "5-10", "*", "*", "*", "*" ).unwrap();
+        
+        assert_eq!(
+            c.get_next_occurrence( Utc.with_ymd_and_hms(2022, 11, 28, 1, 5, 0).unwrap() ),
+            Utc.with_ymd_and_hms(2022, 11, 28, 1, 6, 0).unwrap()
+        );
+    }
+
+    #[test]
+    fn should_increment_minute_to_min_range(){
+        let c = CronSchedule::new( "5-10", "*", "*", "*", "*" ).unwrap();
+        
+        assert_eq!(
+            c.get_next_occurrence( Utc.with_ymd_and_hms(2022, 11, 28, 1, 1, 0).unwrap() ),
+            Utc.with_ymd_and_hms(2022, 11, 28, 1, 5, 0).unwrap()
+        );
+    }
+
+    #[test]
+    fn should_increment_minute_to_min_range_if_above_max(){
+        let c = CronSchedule::new( "5-10", "*", "*", "*", "*" ).unwrap();
+        
+        assert_eq!(
+            c.get_next_occurrence( Utc.with_ymd_and_hms(2022, 11, 28, 1, 11, 0).unwrap() ),
+            Utc.with_ymd_and_hms(2022, 11, 28, 2, 5, 0).unwrap()
+        );
+    }
+
+    #[test]
+    fn should_increment_minute_to_next_within_range(){
+        let c = CronSchedule::new( "5-10", "*", "*", "*", "*" ).unwrap();
+        
+        assert_eq!(
+            c.get_next_occurrence( Utc.with_ymd_and_hms(2022, 11, 28, 1, 6, 0).unwrap() ),
+            Utc.with_ymd_and_hms(2022, 11, 28, 1, 7, 0).unwrap()
+        );
+    }
+
+    #[test]
+    fn should_fail_to_parse_range_invalid_min(){
+        let did_error = match CronSchedule::new( "60-10", "*", "*", "*", "7" ) {
+            Err(_e) => true,
+            _ => false
+        };
+        
+        assert!( did_error );
+    }
+
+    #[test]
+    fn should_fail_to_parse_range_invalid_max(){
+        let did_error = match CronSchedule::new( "50-75", "*", "*", "*", "7" ) {
+            Err(_e) => true,
+            _ => false
+        };
+        
+        assert!( did_error );
+    }
+
+    #[test]
+    fn should_fail_to_parse_range_invalid_range(){
+        let did_error = match CronSchedule::new( "48-32", "*", "*", "*", "7" ) {
+            Err(_e) => true,
+            _ => false
+        };
+        
+        assert!( did_error );
+    }
+}
+
+fn is_range( arg: &str ) -> bool {
+    Regex::new( r"^\d+-\d+$" ).unwrap().is_match( arg )
 }
 
 #[derive(Debug)]
 pub enum CronCommand {
     Asterisk,
     Number(u32),
+    Range(u32, u32)
 }
 
 impl CronCommand {
     fn from_str( val: &str ) -> Result<CronCommand, Box<dyn Error>> {
         match val {
+            r if is_range( val ) => {
+                let parts : Vec<&str> = val.split( '-' ).collect();
+
+                let min = u32::from_str_radix( parts[0], 10 )?;
+                let max = u32::from_str_radix( parts[1], 10 )?;
+
+                Ok(CronCommand::Range(min, max))
+            },
             "*" => Ok(CronCommand::Asterisk),
             v => {
                 let num = u32::from_str_radix( v, 10 )?;
@@ -164,7 +250,8 @@ impl CronCommand {
     fn to_string( &self ) -> String {
         match self {
             CronCommand::Asterisk => "*".to_owned(),
-            CronCommand::Number(n) => n.to_string() 
+            CronCommand::Number(n) => n.to_string() ,
+            CronCommand::Range( min, max ) => format!( "{min} to {max}" )
         }
     }
 }
@@ -192,27 +279,7 @@ impl Display for CronPosition {
     }
 }
 
-#[derive(Debug)]
-struct CronNumberParseError {
-    details: String
-}
 
-impl CronNumberParseError {
-    fn new( position: CronPosition, min: u32, max: u32 ) -> CronNumberParseError {
-        CronNumberParseError { details: format!("{} must be between {} and {} inclusive", position, min, max ) }
-    }
-}
-impl Display for CronNumberParseError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f,"{}", self.details )
-    }
-}
-
-impl Error for CronNumberParseError {
-    fn description(&self) -> &str {
-        &self.details
-    }
-}
 
 #[derive(Debug)]
 struct CronArg( CronPosition, CronCommand );
@@ -226,29 +293,45 @@ impl CronArg {
                 match position {
                     CronPosition::Minute => {
                         if n > 59 {
-                            return Err( Box::new( CronNumberParseError::new( CronPosition::Minute, 0, 59 ) ) );
+                            return Err( Box::new( errors::CronNumberParseError::new( &CronPosition::Minute.to_string(), 0, 59 ) ) );
                         }
                     },
                     CronPosition::Hour => {
                         if n > 23 {
-                            return Err( Box::new( CronNumberParseError::new( CronPosition::Hour, 0, 23 ) ) );
+                            return Err( Box::new( errors::CronNumberParseError::new( &CronPosition::Hour.to_string(), 0, 23 ) ) );
                         }
                     },
                     CronPosition::DayOfMonth => {
                         if n > 31 || n == 0 {
-                            return Err( Box::new( CronNumberParseError::new( CronPosition::DayOfMonth, 1, 31 ) ) );
+                            return Err( Box::new( errors::CronNumberParseError::new( &CronPosition::DayOfMonth.to_string(), 1, 31 ) ) );
                         }
                     },
                     CronPosition::Month => {
                         if n > 12 || n == 0 {
-                            return Err( Box::new( CronNumberParseError::new( CronPosition::Month, 1, 12 ) ) );
+                            return Err( Box::new( errors::CronNumberParseError::new( &CronPosition::Month.to_string(), 1, 12 ) ) );
                         }
                     },
                     CronPosition::DayOfWeek => {
                         if n > 6 {
-                            return Err( Box::new( CronNumberParseError::new( CronPosition::DayOfWeek, 0, 6 ) ) );
+                            return Err( Box::new( errors::CronNumberParseError::new( &CronPosition::DayOfWeek.to_string(), 0, 6 ) ) );
                         }
                     }
+                }
+            },
+            CronCommand::Range(min,max) => {
+                match position {
+                    CronPosition::Minute => {
+                        if max > 59 {
+                            return Err( Box::new( errors::CronNumberParseError::new( &CronPosition::Minute.to_string(), 0, 59 ) ) );
+                        }
+                        else if min > 59 {
+                            return Err( Box::new( errors::CronNumberParseError::new( &CronPosition::Minute.to_string(), 0, 59 ) ) );
+                        }
+                        else if min >= max {
+                            return Err( Box::new( errors::CronInvalidRange::new( &CronPosition::Minute.to_string() ) ) );
+                        }
+                    },
+                    _ => {}
                 }
             },
             _ => {}
@@ -260,6 +343,25 @@ impl CronArg {
     fn update_date( &self, date: &DateTime<Utc> ) -> DateTime<Utc> {
         match self.1 {
             CronCommand::Asterisk => date.clone(),
+            CronCommand::Range(min, max) => {
+                match self.0 {
+                    CronPosition::Minute => {
+                        let next = date.clone();
+                        let current_minute = next.minute();
+
+                        if max <= current_minute {
+                            next.with_hour( date.hour() + 1 ).unwrap().with_minute(min).unwrap()
+                        }
+                        else if current_minute < min {
+                            next.with_minute(min).unwrap()
+                        }
+                        else {
+                            next.with_minute(current_minute + 1).unwrap()
+                        }
+                    },
+                    _ => date.clone()
+                }
+            },
             CronCommand::Number(n) => {
                 match self.0 {
                     CronPosition::DayOfWeek => {
