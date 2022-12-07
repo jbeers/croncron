@@ -1,10 +1,15 @@
 
-use std::{error::Error, fmt::Display};
-use regex::Regex;
+use std::{error::Error};
+
 
 use chrono::{prelude::*};
 
 mod errors;
+mod position;
+mod command;
+
+use position::{*};
+use command::{*};
 /*
 https://en.wikipedia.org/wiki/Cron
 # ┌───────────── minute (0 - 59)
@@ -226,68 +231,7 @@ mod tests {
     }
 }
 
-fn is_range( arg: &str ) -> bool {
-    Regex::new( r"^\d+-\d+$" ).unwrap().is_match( arg )
-}
 
-#[derive(Debug)]
-pub enum CronCommand {
-    Asterisk,
-    Number(u32),
-    Range(u32, u32)
-}
-
-impl CronCommand {
-    fn from_str( val: &str ) -> Result<CronCommand, Box<dyn Error>> {
-        match val {
-            range_str if is_range( range_str ) => {
-                let parts : Vec<&str> = range_str.split( '-' ).collect();
-
-                let min = u32::from_str_radix( parts[0], 10 )?;
-                let max = u32::from_str_radix( parts[1], 10 )?;
-
-                Ok(CronCommand::Range(min, max))
-            },
-            "*" => Ok(CronCommand::Asterisk),
-            v => {
-                let num = u32::from_str_radix( v, 10 )?;
-
-                Ok(CronCommand::Number( num ))
-            }
-        }
-    }
-
-    fn to_string( &self ) -> String {
-        match self {
-            CronCommand::Asterisk => "*".to_owned(),
-            CronCommand::Number(n) => n.to_string() ,
-            CronCommand::Range( min, max ) => format!( "{min} to {max}" )
-        }
-    }
-}
-
-#[derive(Debug)]
-enum CronPosition {
-    Minute,
-    Hour,
-    DayOfMonth,
-    Month,
-    DayOfWeek
-}
-
-impl Display for CronPosition {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let display = match self {
-            CronPosition::Minute => "Minute",
-            CronPosition::Hour => "Hour",
-            CronPosition::DayOfMonth => "DayOfMonth",
-            CronPosition::Month => "Month",
-            CronPosition::DayOfWeek => "DayOfWeek",
-        };
-
-        write!( f, "{display}" )
-    }
-}
 
 macro_rules! validate_number {
     ($position:path where $n:ident between $min:literal and $max:literal) => {
