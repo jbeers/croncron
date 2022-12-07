@@ -214,6 +214,16 @@ mod tests {
         
         assert!( did_error );
     }
+
+    #[test]
+    fn should_fail_to_parse_range_invalid_hour_range(){
+        let did_error = match CronSchedule::new( "*", "25", "*", "*", "7" ) {
+            Err(_e) => true,
+            _ => false
+        };
+        
+        assert!( did_error );
+    }
 }
 
 fn is_range( arg: &str ) -> bool {
@@ -230,8 +240,8 @@ pub enum CronCommand {
 impl CronCommand {
     fn from_str( val: &str ) -> Result<CronCommand, Box<dyn Error>> {
         match val {
-            r if is_range( val ) => {
-                let parts : Vec<&str> = val.split( '-' ).collect();
+            range_str if is_range( range_str ) => {
+                let parts : Vec<&str> = range_str.split( '-' ).collect();
 
                 let min = u32::from_str_radix( parts[0], 10 )?;
                 let max = u32::from_str_radix( parts[1], 10 )?;
@@ -279,6 +289,33 @@ impl Display for CronPosition {
     }
 }
 
+macro_rules! validate_number {
+    ($position:path where $n:ident between $min:literal and $max:literal) => {
+        {
+            #[allow(unused_comparisons)]
+            if $n > $max || $n < $min {
+                return Err( Box::new( errors::CronNumberParseError::new( &$position.to_string(), $min, $max ) ) );
+            }
+        }
+    };
+}
+
+macro_rules! validate_range {
+    ($position:path where $a:ident to $b:ident between $min:literal and $max:literal) => {
+        {
+            if $b > $max {
+                return Err( Box::new( errors::CronNumberParseError::new( &$position.to_string(), $min, $max ) ) );
+            }
+            else if $a > $max {
+                return Err( Box::new( errors::CronNumberParseError::new( &$position.to_string(), $min, $max ) ) );
+            }
+            else if $a >= $b {
+                return Err( Box::new( errors::CronInvalidRange::new( &$position.to_string() ) ) );
+            }
+        }
+    };
+}
+
 
 
 #[derive(Debug)]
@@ -291,47 +328,20 @@ impl CronArg {
         match command {
             CronCommand::Number(n) => {
                 match position {
-                    CronPosition::Minute => {
-                        if n > 59 {
-                            return Err( Box::new( errors::CronNumberParseError::new( &CronPosition::Minute.to_string(), 0, 59 ) ) );
-                        }
-                    },
-                    CronPosition::Hour => {
-                        if n > 23 {
-                            return Err( Box::new( errors::CronNumberParseError::new( &CronPosition::Hour.to_string(), 0, 23 ) ) );
-                        }
-                    },
-                    CronPosition::DayOfMonth => {
-                        if n > 31 || n == 0 {
-                            return Err( Box::new( errors::CronNumberParseError::new( &CronPosition::DayOfMonth.to_string(), 1, 31 ) ) );
-                        }
-                    },
-                    CronPosition::Month => {
-                        if n > 12 || n == 0 {
-                            return Err( Box::new( errors::CronNumberParseError::new( &CronPosition::Month.to_string(), 1, 12 ) ) );
-                        }
-                    },
-                    CronPosition::DayOfWeek => {
-                        if n > 6 {
-                            return Err( Box::new( errors::CronNumberParseError::new( &CronPosition::DayOfWeek.to_string(), 0, 6 ) ) );
-                        }
-                    }
+                    CronPosition::Minute => validate_number!( CronPosition::Minute where n between 0 and 59 ),
+                    CronPosition::Hour => validate_number!( CronPosition::Hour where n between 0 and 23 ),
+                    CronPosition::DayOfMonth => validate_number!( CronPosition::DayOfMonth where n between 1 and 31 ),
+                    CronPosition::Month => validate_number!( CronPosition::Month where n between 1 and 12 ),
+                    CronPosition::DayOfWeek => validate_number!( CronPosition::DayOfWeek where n between 0 and 6 ),
                 }
             },
             CronCommand::Range(min,max) => {
                 match position {
-                    CronPosition::Minute => {
-                        if max > 59 {
-                            return Err( Box::new( errors::CronNumberParseError::new( &CronPosition::Minute.to_string(), 0, 59 ) ) );
-                        }
-                        else if min > 59 {
-                            return Err( Box::new( errors::CronNumberParseError::new( &CronPosition::Minute.to_string(), 0, 59 ) ) );
-                        }
-                        else if min >= max {
-                            return Err( Box::new( errors::CronInvalidRange::new( &CronPosition::Minute.to_string() ) ) );
-                        }
-                    },
-                    _ => {}
+                    CronPosition::Minute => validate_range!( CronPosition::Minute where min to max between 0 and 59 ),
+                    CronPosition::Hour => validate_range!( CronPosition::Hour where min to max between 0 and 23 ),
+                    CronPosition::DayOfMonth => validate_range!( CronPosition::DayOfMonth where min to max between 1 and 31 ),
+                    CronPosition::Month => validate_range!( CronPosition::Month where min to max between 1 and 12 ),
+                    CronPosition::DayOfWeek => validate_range!( CronPosition::DayOfWeek where min to max between 0 and 6 ),
                 }
             },
             _ => {}
