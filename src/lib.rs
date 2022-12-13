@@ -222,12 +222,66 @@ mod tests {
 
     #[test]
     fn should_fail_to_parse_range_invalid_hour_range(){
-        let did_error = match CronSchedule::new( "*", "25", "*", "*", "7" ) {
+        let did_error = match CronSchedule::new( "*", "27-25", "*", "*", "7" ) {
             Err(_e) => true,
             _ => false
         };
         
         assert!( did_error );
+
+        let did_error = match CronSchedule::new( "*", "30-21", "*", "*", "7" ) {
+            Err(_e) => true,
+            _ => false
+        };
+        
+        assert!( did_error );
+
+        let did_error = match CronSchedule::new( "*", "21-27", "*", "*", "7" ) {
+            Err(_e) => true,
+            _ => false
+        };
+        
+        assert!( did_error );
+    }
+
+    #[test]
+    fn should_increment_hour_range(){
+        let c = CronSchedule::new( "*", "15-18", "*", "*", "*" ).unwrap();
+        
+        assert_eq!(
+            c.get_next_occurrence( Utc.with_ymd_and_hms(2022, 11, 28, 1, 0, 0).unwrap() ),
+            Utc.with_ymd_and_hms(2022, 11, 28, 15, 0, 0).unwrap()
+        );
+
+        assert_eq!(
+            c.get_next_occurrence( Utc.with_ymd_and_hms(2022, 11, 28, 17, 0, 0).unwrap() ),
+            Utc.with_ymd_and_hms(2022, 11, 28, 18, 0, 0).unwrap()
+        );
+
+        assert_eq!(
+            c.get_next_occurrence( Utc.with_ymd_and_hms(2022, 11, 28, 19, 0, 0).unwrap() ),
+            Utc.with_ymd_and_hms(2022, 11, 29, 15, 0, 0).unwrap()
+        );
+    }
+
+    #[test]
+    fn should_increment_month_range(){
+        let c = CronSchedule::new( "*", "*", "*", "2-4", "*" ).unwrap();
+        
+        assert_eq!(
+            c.get_next_occurrence( Utc.with_ymd_and_hms(2022, 11, 28, 1, 0, 0).unwrap() ),
+            Utc.with_ymd_and_hms(2023, 2, 1, 0, 0, 0).unwrap()
+        );
+
+        assert_eq!(
+            c.get_next_occurrence( Utc.with_ymd_and_hms(2022, 3, 2, 17, 0, 0).unwrap() ),
+            Utc.with_ymd_and_hms(2022, 4, 1, 0, 0, 0).unwrap()
+        );
+
+        assert_eq!(
+            c.get_next_occurrence( Utc.with_ymd_and_hms(2022, 4, 4, 19, 0, 0).unwrap() ),
+            Utc.with_ymd_and_hms(2023, 2, 1, 0, 0, 0).unwrap()
+        );
     }
 }
 
@@ -295,96 +349,14 @@ impl CronArg {
     }
 
     fn update_date( &self, date: &DateTime<Utc> ) -> DateTime<Utc> {
+        let current_value = self.0.get_value_from_date( date );
+        let next_value = self.1.get_next_value(current_value, self.0.get_min(), self.0.get_max() );
+        
+        // self.0.update_date(date, next_value)
         match self.1 {
             CronCommand::Asterisk => date.clone(),
-            CronCommand::Range(min, max) => {
-                match self.0 {
-                    CronPosition::Minute => {
-                        let next = date.clone();
-                        let current_minute = next.minute();
-
-                        if max <= current_minute {
-                            next.with_hour( date.hour() + 1 ).unwrap().with_minute(min).unwrap()
-                        }
-                        else if current_minute < min {
-                            next.with_minute(min).unwrap()
-                        }
-                        else {
-                            next.with_minute(current_minute + 1).unwrap()
-                        }
-                    },
-                    _ => date.clone()
-                }
-            },
-            CronCommand::Number(n) => {
-                match self.0 {
-                    CronPosition::DayOfWeek => {
-                        let current_weekday = date.weekday().num_days_from_sunday();
-                        let to_add = if current_weekday < n {
-                            n - current_weekday
-                        }
-                        else {
-                            ( current_weekday + 7 ) - n
-                        };
-
-
-                        let days = chrono::Days::new( to_add.into() );
-
-                        let next = date.checked_add_days( days ).unwrap()
-                            .with_hour( 0 ).unwrap()
-                            .with_minute(0).unwrap();
-
-                        next
-
-                    },
-                    CronPosition::Month => {
-                        let next = date.clone()
-                            .with_month( n ).unwrap()
-                            .with_day(1).unwrap()
-                            .with_hour( 0 ).unwrap()
-                            .with_minute(0).unwrap();
-
-                        if next.lt( date ) {
-                            next.with_year( date.year() + 1 ).unwrap()
-                        }
-                        else {
-                            next
-                        }
-
-                    },
-                    CronPosition::DayOfMonth => {
-                        let next = date.clone().with_day(n).unwrap().with_hour( 0 ).unwrap().with_minute(0).unwrap();
-
-                        if next.lt( date ) {
-                            next.with_month( date.month() + 1 ).unwrap()
-                        }
-                        else {
-                            next
-                        }
-
-                    },
-                    CronPosition::Hour => {
-                        let next = date.clone().with_hour( n ).unwrap().with_minute(0).unwrap();
-
-                        if next.lt( date ) {
-                            next.with_day( date.day() + 1 ).unwrap()
-                        }
-                        else {
-                            next
-                        }
-
-                    },
-                    CronPosition::Minute => {
-                        let next = date.clone().with_minute( n ).unwrap();
-
-                        if next.lt( date ) {
-                            next.with_hour( date.hour() + 1 ).unwrap()
-                        }
-                        else {
-                            next
-                        }
-                    }
-                }
+            _ => {
+                self.0.update_date(date, next_value)
             }
         }
     }

@@ -42,4 +42,26 @@ impl CronCommand {
             CronCommand::Range( min, max ) => format!( "{min} to {max}" )
         }
     }
+
+    pub fn get_next_value( &self, current: u32, min: u32, max: u32 ) -> u32 {
+        match self {
+            CronCommand::Asterisk => {
+                if current == max {
+                    min
+                }
+                else {
+                    current + 1
+                }
+            },
+            CronCommand::Number(num) => *num,
+            CronCommand::Range(min, max) => {
+                if current >= *max || current < *min {
+                    *min
+                }
+                else {
+                    current + 1
+                }
+            },
+        }
+    }
 }
