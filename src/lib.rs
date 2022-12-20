@@ -34,12 +34,23 @@ mod tests {
             )
         };
     }
+
+    macro_rules! doesnt_match_schedule {
+        ($min:literal, $hour:literal, $day_of_month:literal, $month:literal, $day_of_week:literal, $date_str:literal ) => {
+            assert_eq!(
+                CronSchedule::new( $min, $hour, $day_of_month, $month, $day_of_week ).unwrap().check_date( &$date_str.parse::<DateTime<Utc>>().unwrap() ),false
+            )
+        };
+    }
     
 
     #[test]
     fn should_match_dates(){
         matches_schedule!( "*", "*", "*", "*", "*", "2022-12-17 11:36:00Z");
         matches_schedule!( "*", "*", "*", "*", "Monday", "2022-12-19 11:36:00Z");
+        matches_schedule!( "/6", "*", "*", "*", "*", "2022-12-19 11:36:00Z");
+        matches_schedule!( "*", "*", "*", "/12", "*", "2022-12-19 11:36:00Z");
+        doesnt_match_schedule!( "/5", "*", "*", "*", "*", "2022-12-19 11:36:00Z");
     }
 
     #[test]

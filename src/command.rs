@@ -13,6 +13,10 @@ fn is_day( arg: &str ) -> bool {
     Regex::new( r"(?i)Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday" ).unwrap().is_match( arg )
 }
 
+fn is_interval( arg: &str ) -> bool {
+    Regex::new( r"/\d+" ).unwrap().is_match( arg )
+}
+
 #[derive(Debug)]
 pub enum DayOfWeek {
     Sunday,
@@ -68,12 +72,18 @@ pub enum CronCommand {
     Asterisk,
     Number(u32),
     Range(u32, u32),
-    DayOfWeek(DayOfWeek)
+    DayOfWeek(DayOfWeek),
+    Interval(u32)
 }
 
 impl CronCommand {
     pub fn from_str( val: &str ) -> Result<CronCommand, Box<dyn Error>> {
         match val {
+            interval_str if is_interval( interval_str ) => {
+                let num: u32 = interval_str.replace("/", "" ).parse()?;
+                
+                Ok(CronCommand::Interval( num ))
+            },
             day_str if is_day( day_str ) => {
                 Ok(CronCommand::DayOfWeek( DayOfWeek::from_str( day_str ) ))
             },
@@ -100,6 +110,7 @@ impl CronCommand {
             CronCommand::Number(n) => n.to_string() ,
             CronCommand::Range( min, max ) => format!( "{min} to {max}" ),
             CronCommand::DayOfWeek(d) => d.to_string(),
+            CronCommand::Interval(i) => format!( "/{i}" ),
         }
     }
 
@@ -109,6 +120,7 @@ impl CronCommand {
             CronCommand::Number(n) => current == *n,
             CronCommand::Range( min, max ) => current <= *max && current >= *min,
             CronCommand::DayOfWeek(day) => date.weekday().num_days_from_sunday() == day.index(),
+            CronCommand::Interval(i) => (current % *i )== 0,
         }
     }
 
@@ -132,6 +144,26 @@ impl CronCommand {
                 }
             },
             CronCommand::DayOfWeek(_) => todo!(),
+            CronCommand::Interval(i) => {
+                if *i > current {
+                    return *i;
+                }
+
+                let m = current / i;
+                let next = if m == 0 {
+                    current + m
+                }
+                else {
+                    current + i
+                };
+
+                if next < max {
+                    next
+                }
+                else {
+                    *i
+                }
+            },
         }
     }
 }
