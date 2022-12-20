@@ -1,5 +1,5 @@
 
-use std::{error::Error};
+use std::{error::Error, fmt::Display};
 
 
 use chrono::{prelude::*};
@@ -26,6 +26,21 @@ https://en.wikipedia.org/wiki/Cron
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    macro_rules! matches_schedule {
+        ($min:literal, $hour:literal, $day_of_month:literal, $month:literal, $day_of_week:literal, $date_str:literal ) => {
+            assert!(
+                CronSchedule::new( $min, $hour, $day_of_month, $month, $day_of_week ).unwrap().check_date( &$date_str.parse::<DateTime<Utc>>().unwrap() )
+            )
+        };
+    }
+    
+
+    #[test]
+    fn should_match_dates(){
+        matches_schedule!( "*", "*", "*", "*", "*", "2022-12-17 11:36:00Z");
+        matches_schedule!( "*", "*", "*", "*", "Monday", "2022-12-19 11:36:00Z");
+    }
 
     #[test]
     fn to_str_should_produce_cron_string(){
@@ -317,7 +332,10 @@ macro_rules! validate_range {
 
 
 #[derive(Debug)]
-struct CronArg( CronPosition, CronCommand );
+struct CronArg{
+    position: CronPosition,
+    command: CronCommand
+}
 
 impl CronArg {
     fn parse( position: CronPosition, command_string: &str ) -> Result<CronArg, Box<dyn Error>>  {
@@ -345,20 +363,25 @@ impl CronArg {
             _ => {}
         }
 
-        Ok( CronArg( position, command ) )
+        Ok( CronArg{ position, command } )
     }
 
     fn update_date( &self, date: &DateTime<Utc> ) -> DateTime<Utc> {
-        let current_value = self.0.get_value_from_date( date );
-        let next_value = self.1.get_next_value(current_value, self.0.get_min(), self.0.get_max() );
+        let current_value = self.position.get_value_from_date( date );
+        let next_value = self.command.get_next_value(current_value, self.position.get_min(), self.position.get_max() );
         
         // self.0.update_date(date, next_value)
-        match self.1 {
+        match self.command {
             CronCommand::Asterisk => date.clone(),
             _ => {
-                self.0.update_date(date, next_value)
+                self.position.update_date(date, next_value)
             }
         }
+    }
+
+    pub fn check_date( &self, date: &DateTime<Utc> ) -> bool {
+        let current_value = self.position.get_value_from_date( date );
+        self.command.is_valid(current_value, date)
     }
 }
 
@@ -370,6 +393,7 @@ pub struct CronSchedule {
     cron_month: CronArg,
     cron_day_of_week: CronArg
 }
+
 
 impl CronSchedule {
 
@@ -383,14 +407,22 @@ impl CronSchedule {
         })
     }
 
+    pub fn check_date( &self, date: &DateTime<Utc> ) -> bool {
+        self.cron_day_of_week.check_date( date )
+        && self.cron_month.check_date( &date )
+        && self.cron_day_of_month.check_date( &date )
+        && self.cron_hour.check_date( &date )
+        && self.cron_minute.check_date( &date )
+    }
+
     pub fn to_string( &self ) -> String {
         format!(
             "{} {} {} {} {}",
-            self.cron_minute.1.to_string(),
-            self.cron_hour.1.to_string(),
-            self.cron_day_of_month.1.to_string(),
-            self.cron_month.1.to_string(),
-            self.cron_day_of_week.1.to_string(),
+            self.cron_minute.command.to_string(),
+            self.cron_hour.command.to_string(),
+            self.cron_day_of_month.command.to_string(),
+            self.cron_month.command.to_string(),
+            self.cron_day_of_week.command.to_string(),
         )
     }
 
