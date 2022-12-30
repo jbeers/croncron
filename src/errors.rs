@@ -45,3 +45,25 @@ impl Error for CronInvalidRange {
         DETAILS
     }
 }
+
+#[derive(Debug)]
+pub struct CronInvalidArgument {
+    details: String
+}
+
+impl CronInvalidArgument {
+    pub fn new( position: &str, arg: &str ) -> CronNumberParseError {
+        CronNumberParseError { details: format!("The argument {} is invalid in the {} position", arg, position ) }
+    }
+}
+impl Display for CronInvalidArgument {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f,"{}", self.details )
+    }
+}
+
+impl Error for CronInvalidArgument {
+    fn description(&self) -> &str {
+        &self.details
+    }
+}

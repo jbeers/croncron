@@ -5,6 +5,61 @@ use std::{error::Error};
 use chrono::{DateTime, Utc, Datelike};
 use regex::Regex;
 
+#[cfg(test)]
+mod test {
+
+    use super::*;
+
+    #[test]
+    fn w_should_match_weekday(){
+        let command = CronCommand::W( 5 );
+        let date = "2022-12-5 11:36:00Z".parse::<DateTime<Utc>>().unwrap();
+
+        assert!( command.is_valid( 5, &date ) );
+    }
+
+    #[test]
+    fn w_should_not_match_sunday(){
+        let command = CronCommand::W( 4 );
+        let date = "2022-12-4 11:36:00Z".parse::<DateTime<Utc>>().unwrap();
+
+        assert!( !command.is_valid( 4, &date ) );
+    }
+
+    #[test]
+    fn w_should_match_next_monday(){
+        let command = CronCommand::W( 4 );
+        let date = "2022-12-5 11:36:00Z".parse::<DateTime<Utc>>().unwrap();
+
+        assert!( command.is_valid( 5, &date ) );
+    }
+
+    #[test]
+    fn w_should_not_match_saturday(){
+        let command = CronCommand::W( 3 );
+        let date = "2022-12-3 11:36:00Z".parse::<DateTime<Utc>>().unwrap();
+
+        assert!( !command.is_valid( 3, &date ) );
+    }
+
+    #[test]
+    fn w_should_match_prev_friday(){
+        let command = CronCommand::W( 3 );
+        let date = "2022-12-2 11:36:00Z".parse::<DateTime<Utc>>().unwrap();
+
+        assert!( command.is_valid( 2, &date ) );
+    }
+
+    #[test]
+    fn w_should_match_next_monday_if_early_month(){
+        let command = CronCommand::W( 1 );
+        let date = "2022-10-3 11:36:00Z".parse::<DateTime<Utc>>().unwrap();
+
+        assert!( command.is_valid( 3, &date ) );
+    }
+}
+
+
 fn is_range( arg: &str ) -> bool {
     Regex::new( r"^\d+-\d+$" ).unwrap().is_match( arg )
 }
@@ -15,6 +70,10 @@ fn is_day( arg: &str ) -> bool {
 
 fn is_interval( arg: &str ) -> bool {
     Regex::new( r"/\d+" ).unwrap().is_match( arg )
+}
+
+fn is_w( arg: &str ) -> bool {
+    Regex::new( r"\d+W" ).unwrap().is_match( arg )
 }
 
 #[derive(Debug)]
@@ -73,12 +132,18 @@ pub enum CronCommand {
     Number(u32),
     Range(u32, u32),
     DayOfWeek(DayOfWeek),
-    Interval(u32)
+    Interval(u32),
+    W(u32)
 }
 
 impl CronCommand {
     pub fn from_str( val: &str ) -> Result<CronCommand, Box<dyn Error>> {
         match val {
+            w_str if is_w( w_str ) => {
+                let num: u32 = w_str.replace(r"W", "" ).parse()?;
+
+                Ok(CronCommand::W( num ))
+            },
             interval_str if is_interval( interval_str ) => {
                 let num: u32 = interval_str.replace("/", "" ).parse()?;
                 
@@ -111,6 +176,7 @@ impl CronCommand {
             CronCommand::Range( min, max ) => format!( "{min} to {max}" ),
             CronCommand::DayOfWeek(d) => d.to_string(),
             CronCommand::Interval(i) => format!( "/{i}" ),
+            CronCommand::W(n) => format!( "{n}W" ),
         }
     }
 
@@ -121,6 +187,23 @@ impl CronCommand {
             CronCommand::Range( min, max ) => current <= *max && current >= *min,
             CronCommand::DayOfWeek(day) => date.weekday().num_days_from_sunday() == day.index(),
             CronCommand::Interval(i) => (current % *i )== 0,
+            CronCommand::W(n) => {
+                if current == *n && date.weekday().num_days_from_monday() < 5 {
+                    true
+                }
+                else if date.weekday().num_days_from_sunday() == 1 && ( date.day() - 1 ) == *n {
+                    true 
+                }
+                else if date.weekday().num_days_from_sunday() == 5 && ( date.day() + 1 ) == *n {
+                    true 
+                }
+                else if *n == 1 && date.day() == 3 {
+                    true 
+                }
+                else {
+                    false
+                }
+            }
         }
     }
 
@@ -164,6 +247,7 @@ impl CronCommand {
                     *i
                 }
             },
+            CronCommand::W(n) => todo!()
         }
     }
 }

@@ -1,5 +1,5 @@
 
-use std::{error::Error, fmt::Display};
+use std::{error::Error};
 
 
 use chrono::{prelude::*};
@@ -309,6 +309,44 @@ mod tests {
             Utc.with_ymd_and_hms(2023, 2, 1, 0, 0, 0).unwrap()
         );
     }
+
+    #[test]
+    fn should_only_parse_w_in_day_of_month(){
+        // let did_error = match CronSchedule::new( "5W", "*", "*", "*", "*" ) {
+        //     Err(_e) => true,
+        //     _ => false
+        // };
+        
+        // assert!( did_error );
+
+        // let did_error = match CronSchedule::new( "*", "5W", "*", "*", "*" ) {
+        //     Err(_e) => true,
+        //     _ => false
+        // };
+        
+        // assert!( did_error );
+
+        // let did_error = match CronSchedule::new( "*", "*", "*", "5W", "*" ) {
+        //     Err(_e) => true,
+        //     _ => false
+        // };
+        
+        // assert!( did_error );
+
+        // let did_error = match CronSchedule::new( "*", "*", "*", "*", "5W" ) {
+        //     Err(_e) => true,
+        //     _ => false
+        // };
+        
+        // assert!( did_error );
+
+        let did_error = match CronSchedule::new( "*", "*", "5W", "*", "*" ) {
+            Err(_e) => true,
+            _ => false
+        };
+        
+        assert!( !did_error );
+    }
 }
 
 
@@ -371,6 +409,14 @@ impl CronArg {
                     CronPosition::DayOfWeek => validate_range!( CronPosition::DayOfWeek where min to max between 0 and 6 ),
                 }
             },
+            CronCommand::W(n) => {
+                match position {
+                    CronPosition::DayOfMonth => {},
+                    _ => {
+                        return Err( Box::new( errors::CronInvalidArgument::new( &position.to_string(), &command.to_string() ) ) );
+                    },
+                }
+            }
             _ => {}
         }
 
