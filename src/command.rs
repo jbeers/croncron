@@ -57,6 +57,22 @@ mod test {
 
         assert!( command.is_valid( 3, &date ) );
     }
+
+    #[test]
+    fn l_should_match_last_friday(){
+        let command = CronCommand::L( 5 );
+        let date = "2023-01-27 11:36:00Z".parse::<DateTime<Utc>>().unwrap();
+
+        assert!( command.is_valid( 5, &date ) );
+    }
+
+    #[test]
+    fn l_should_not_match_first_friday(){
+        let command = CronCommand::L( 5 );
+        let date = "2023-01-6 11:36:00Z".parse::<DateTime<Utc>>().unwrap();
+
+        assert!( !command.is_valid( 5, &date ) );
+    }
 }
 
 
@@ -74,6 +90,10 @@ fn is_interval( arg: &str ) -> bool {
 
 fn is_w( arg: &str ) -> bool {
     Regex::new( r"\d+W" ).unwrap().is_match( arg )
+}
+
+fn is_l( arg: &str ) -> bool {
+    Regex::new( r"\d+L" ).unwrap().is_match( arg )
 }
 
 #[derive(Debug)]
@@ -133,12 +153,18 @@ pub enum CronCommand {
     Range(u32, u32),
     DayOfWeek(DayOfWeek),
     Interval(u32),
-    W(u32)
+    W(u32),
+    L(u32)
 }
 
 impl CronCommand {
     pub fn from_str( val: &str ) -> Result<CronCommand, Box<dyn Error>> {
         match val {
+            l_str if is_l( l_str ) => {
+                let num: u32 = l_str.replace(r"L", "" ).parse()?;
+
+                Ok(CronCommand::L( num ))
+            },
             w_str if is_w( w_str ) => {
                 let num: u32 = w_str.replace(r"W", "" ).parse()?;
 
@@ -177,6 +203,7 @@ impl CronCommand {
             CronCommand::DayOfWeek(d) => d.to_string(),
             CronCommand::Interval(i) => format!( "/{i}" ),
             CronCommand::W(n) => format!( "{n}W" ),
+            CronCommand::L(n) => format!( "{n}L" ),
         }
     }
 
@@ -199,6 +226,15 @@ impl CronCommand {
                 }
                 else if *n == 1 && date.day() == 3 {
                     true 
+                }
+                else {
+                    false
+                }
+            },
+            CronCommand::L(n) => {
+                let next_week = date.checked_add_days(chrono::Days::new(7) ).unwrap();
+                if current == *n && next_week.month() > date.month() {
+                    true
                 }
                 else {
                     false
@@ -247,7 +283,8 @@ impl CronCommand {
                     *i
                 }
             },
-            CronCommand::W(n) => todo!()
+            CronCommand::W(n) => todo!(),
+            CronCommand::L(n) => todo!()
         }
     }
 }

@@ -1,9 +1,5 @@
 # Todo
 
-
-
-add W support for day of month
-add L support for day of month and day of week
 Double check next occurrence logic
 Add function to generate next x occurrences
 Add a macro to allow parsing cron things like cron!( * * * * * )
@@ -16,6 +12,9 @@ Add - support with validation
 Changes functionality to be focused on checking if date is occurrence of schedule (add next_occurrence logic later)
 Add text support to Monday and day of week
 add / interval support
+add W support for day of month
+
+add L support for day of month and day of week
 
 # Notes
 
